@@ -1,0 +1,53 @@
+#!/bin/bash
+
+log_path="$1"
+shift  # Remove the first argument from the list of arguments
+container_names=("$@")
+
+# Declare an array to store the PIDs of tail_logs subprocesses
+pids=()
+
+# Function to tail logs for a Docker container
+tail_logs() {
+  local container_name="$1"
+  local log_file="$log_path/$container_name.log"
+
+  echo "Tailing logs for $container_name and writing to $log_file..."
+
+  while true; do
+
+    echo "Tailing logs for $container_name and writing to $log_file (following mode)..."
+
+    if [ -f "$log_file" ]; then
+        docker logs --follow -n 0 "$container_name" >> "$log_file" 2>&1
+    else
+        docker logs --follow "$container_name" >> "$log_file" 2>&1
+    fi
+
+    # Check the return status of the previous command
+    if [ $? -ne 0 ]; then
+      echo "Failed to tail logs for $container_name. Retrying..." >&2
+    fi
+
+    sleep 1  # Adjust the sleep interval as needed
+  done
+}
+
+# Trap to clean up subprocesses on script termination
+cleanup() {
+  echo "Cleaning up subprocesses..."
+  kill "${pids[@]}"  # Kill all subprocesses using their PIDs
+}
+
+trap cleanup EXIT
+
+# Start subprocesses for tailing logs and store their PIDs
+for container_name in "${container_names[@]}"; do
+  tail_logs "$container_name" &
+  pids+=($!)  # Store the PID of the background process
+done
+
+# Wait for subprocesses to complete (won't happen due to infinite loop)
+echo "Script is running. Press Ctrl+C to stop and clean up."
+
+wait
