@@ -7,16 +7,19 @@ container_names=("$@")
 # Declare an array to store the PIDs of tail_logs subprocesses
 pids=()
 
+# Simple logging function (STDERR)
+log(){
+    >&2 echo "--- $(date --rfc-3339=ns) - $*"
+}
+
 # Function to tail logs for a Docker container
 tail_logs() {
   local container_name="$1"
   local log_file="$log_path/$container_name.log"
 
-  echo "Tailing logs for $container_name and writing to $log_file..."
+  log "Tailing logs for $container_name and writing to $log_file..."
 
   while true; do
-
-    echo "Tailing logs for $container_name and writing to $log_file (following mode)..."
 
     if [ -f "$log_file" ]; then
         docker logs --follow -n 0 "$container_name" >> "$log_file" 2>&1
@@ -26,8 +29,10 @@ tail_logs() {
 
     # Check the return status of the previous command
     if [ $? -ne 0 ]; then
-      echo "Failed to tail logs for $container_name. Retrying..." >&2
+      log "Failed to tail logs for $container_name. Retrying..."
     fi
+
+    log "Restarting tail for $container_name..."
 
     sleep 1  # Adjust the sleep interval as needed
   done
@@ -35,7 +40,7 @@ tail_logs() {
 
 # Trap to clean up subprocesses on script termination
 cleanup() {
-  echo "Cleaning up subprocesses..."
+  log "Cleaning up subprocesses..."
   kill "${pids[@]}"  # Kill all subprocesses using their PIDs
 }
 
@@ -47,7 +52,7 @@ for container_name in "${container_names[@]}"; do
   pids+=($!)  # Store the PID of the background process
 done
 
-# Wait for subprocesses to complete (won't happen due to infinite loop)
 echo "Script is running. Press Ctrl+C to stop and clean up."
 
+# Wait for subprocesses to complete (won't happen due to infinite loop)
 wait
